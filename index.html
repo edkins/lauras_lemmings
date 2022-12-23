@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script>
+"use strict";
+
+let the_game = undefined;
+
+class Lemming {
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+	}
+}
+
+class Terrain {
+	constructor(image_data) {
+		this.image_data = image_data;
+	}
+
+	static async load(width, height, filename) {
+		const img = new Image(width, height);
+		img.src = filename;
+		await img.decode();
+
+		const canvas = document.createElement('canvas');
+		canvas.width = width;
+		canvas.height = height;
+		const ctx = canvas.getContext('2d');
+		ctx.drawImage(img, 0, 0);
+
+		const image_data = ctx.getImageData(0, 0, width, height);
+		return new Terrain(image_data);
+	}
+}
+
+class Game {
+	constructor(terrain) {
+		this.terrain = terrain;
+	}
+
+	static async load() {
+		const width = 1000;
+		const height = 800;
+		const terrain = await Terrain.load(width, height, 'maps/test_level.png');
+		return new Game(terrain);
+	}
+
+	refresh() {
+		this.restore_from_terrain(0, 0, this.terrain.image_data.width, this.terrain.image_data.height);
+	}
+
+	restore_from_terrain(x, y, w, h) {
+		const canvas = document.getElementById('canvas');
+		const ctx = canvas.getContext('2d');
+		ctx.putImageData(this.terrain.image_data, x, y, x, y, w, h);
+	}
+}
+
+function resize() {
+	const canvas = document.getElementById('canvas');
+	canvas.width = window.innerWidth;
+	canvas.height = window.innerHeight;
+
+	if (the_game !== undefined) {
+		the_game.refresh();
+	}
+}
+
+async function load() {
+	resize();
+	window.addEventListener('resize', resize);
+
+	the_game = await Game.load();
+	the_game.refresh();
+}
+
+window.onload = load;
+</script>
+</head>
+<body>
+<canvas id="canvas" width="100" height="100"></canvas>
+</body>
+</html>
