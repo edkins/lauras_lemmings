@@ -58,10 +58,11 @@ class Lemming {
 		return x >= bbox.x && x < bbox.x + bbox.w && y >= bbox.y && y < bbox.y + bbox.h;
 	}
 
-	tick(terrain) {
+	tick(terrain, exit) {
 		const bbox = this.bounding_box();
 		const d = this.direction;
 
+		// Consider dying
 		if (this.mode === 'splat') {
 			this.frame += 1;
 			if (this.frame >= SPLAT_TIME) {
@@ -70,6 +71,13 @@ class Lemming {
 			return;
 		}
 
+		// Consider whether it's fallen off the edge
+		if (this.x < 0 || this.x >= terrain.image_data.width || this.y < 0 || this.y - bbox.h >= terrain.image_data.height) {
+			this.state = 'dead';
+			return;
+		}
+
+		// Consider falling
 		let fell = 0;
 		for (let offset = 1; offset <= 4; offset++) {
 			if (terrain.rect_is_empty(bbox.x, bbox.y + bbox.h + offset, bbox.w, 1)) {
@@ -102,9 +110,15 @@ class Lemming {
 		}
 		this.fall_distance = 0;
 
+		// Consider exit
+		if (exit.contains(this.x, this.y)) {
+			this.state = 'finished';
+			return;
+		}
+
 		// Consider actions
 		if (this.mode === 'digger') {
-			terrain.erase(bbox.x - 1, bbox.y + bbox.h, bbox.w + 2, 1);
+			terrain.erase(bbox.x - 1, bbox.y + bbox.h - 1, bbox.w + 2, 3);
 			this.y += 1;
 			return;
 		}
@@ -158,11 +172,14 @@ class Terrain {
 		const background = 0xff000000;
 		const data_view = new DataView(this.image_data.data.buffer);
 		const thisw = this.image_data.width;
+		const thish = this.image_data.height;
 		for (let y1 = y; y1 < y + h; y1++) {
 			for (let x1 = x; x1 < x + w; x1++) {
-				let byte_offset = 4 * (y1 * thisw + x1);
-				if (data_view.getUint32(byte_offset, true) !== background) {
-					return false;
+				if (x1 >= 0 && x1 < thisw && y1 >= 0 && y1 < thish) {
+					let byte_offset = 4 * (y1 * thisw + x1);
+					if (data_view.getUint32(byte_offset, true) !== background) {
+						return false;
+					}
 				}
 			}
 		}
@@ -173,10 +190,13 @@ class Terrain {
 		const background = 0xff000000;
 		const data_view = new DataView(this.image_data.data.buffer);
 		const thisw = this.image_data.width;
+		const thish = this.image_data.height;
 		for (let y1 = y; y1 < y + h; y1++) {
 			for (let x1 = x; x1 < x + w; x1++) {
-				let byte_offset = 4 * (y1 * thisw + x1);
-				data_view.setUint32(byte_offset, background, true);
+				if (x1 >= 0 && x1 < thisw && y1 >= 0 && y1 < thish) {
+					let byte_offset = 4 * (y1 * thisw + x1);
+					data_view.setUint32(byte_offset, background, true);
+				}
 			}
 		}
 	}
@@ -227,13 +247,27 @@ class Button {
 	}
 }
 
+class Exit {
+	constructor(x, y, w, h) {
+		this.x = x;
+		this.y = y;
+		this.w = w;
+		this.h = h;
+	}
+
+	contains(x, y) {
+		return x >= this.x && x < this.x + this.w && y >= this.y && y < this.y + this.h;
+	}
+}
+
 class Game {
-	constructor(canvas, terrain, sprites, entrance) {
+	constructor(canvas, terrain, sprites, entrance, exit) {
 		this.canvas = canvas;
 		this.terrain = terrain;
 		this.drawn_regions = [];
 		this.sprites = sprites;
 		this.entrance = entrance;
+		this.exit = exit;
 		this.lemmings = [];
 		this.sel_action = undefined;
 
@@ -263,8 +297,9 @@ class Game {
 		}
 
 		const entrance = new Entrance(142, 210, 10, 40);
+		const exit = new Exit(800, 674, 8, 8);
 
-		return new Game(canvas, terrain, sprites, entrance);
+		return new Game(canvas, terrain, sprites, entrance, exit);
 	}
 
 	refresh() {
@@ -275,7 +310,7 @@ class Game {
 		this.erase_drawn_regions();
 		const next_lemmings = [];
 		for (const lemming of this.lemmings) {
-			lemming.tick(this.terrain);
+			lemming.tick(this.terrain, this.exit);
 			if (lemming.state === 'alive') {
 				next_lemmings.push(lemming);
 			}
@@ -309,7 +344,6 @@ class Game {
 				const lemming = this.lemmings[i];
 				if (lemming.state === 'alive' && lemming.contains(x, y)) {
 					lemming.mode = this.sel_action;
-					console.log(`Make lemming a ${lemming.mode}`);
 					return;
 				}
 			}
@@ -348,13 +382,35 @@ class Game {
 
 	draw_sprite_bottom_centre(name, x, y) {
 		const image_element = this.sprites[name];
-		const w = image_element.width;
-		const h = image_element.height;
+		let w = image_element.width;
+		let h = image_element.height;
 		x -= Math.floor(w / 2);
 		y -= h;
 		this.drawn_regions.push({x, y, w, h});
+		const cw = this.terrain.image_data.width;
+		const ch = this.terrain.image_data.height;
 		const ctx = this.canvas.getContext('2d');
-		ctx.drawImage(image_element, x, y);
+		let sx = 0;
+		let sy = 0;
+		if (x < 0) {
+			sx = -x;
+			w += x;
+			x = 0;
+		}
+		if (y < 0) {
+			sy = -y;
+			h += y;
+			y = 0;
+		}
+		if (x + w > cw) {
+			w = cw - x;
+		}
+		if (y + h > ch) {
+			h = ch - y;
+		}
+		if (w > 0 && h > 0) {
+			ctx.drawImage(image_element, sx, sy, w, h, x, y, w, h);
+		}
 	}
 }
 
