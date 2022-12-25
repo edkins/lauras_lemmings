@@ -13,12 +13,12 @@ body {
 let the_game = undefined;
 
 const TICK_INTERVAL = 50;
-const LEMMING_BBOX_W = 15;
+const LEMMING_BBOX_W = 9;
 const LEMMING_BBOX_H = 25;
 const SPLAT_DISTANCE = 250;
 const WALK_PERIOD = 14;
 const FALL_PERIOD = 4;
-const SPLAT_TIME = 6;
+const SPLAT_TIME = 11;
 
 class Lemming {
 	constructor(x, y) {
@@ -53,6 +53,11 @@ class Lemming {
 		return {x, y, w, h};
 	}
 
+	contains(x, y) {
+		const bbox = this.bounding_box();
+		return x >= bbox.x && x < bbox.x + bbox.w && y >= bbox.y && y < bbox.y + bbox.h;
+	}
+
 	tick(terrain) {
 		const bbox = this.bounding_box();
 		const d = this.direction;
@@ -67,7 +72,7 @@ class Lemming {
 
 		let fell = 0;
 		for (let offset = 1; offset <= 4; offset++) {
-			if (terrain.rect_is_empty(bbox.x - 1, bbox.y + bbox.h + offset, bbox.w + 2, 1)) {
+			if (terrain.rect_is_empty(bbox.x, bbox.y + bbox.h + offset, bbox.w, 1)) {
 				// Lemming can fall at least this amount
 				fell = offset;
 			} else {
@@ -81,7 +86,9 @@ class Lemming {
 			}
 			this.fall_distance += fell;
 			this.frame += 1;
-			return;
+			if (fell === 4) {
+				return;
+			}
 		}
 
 		if (this.fall_distance >= SPLAT_DISTANCE) {
@@ -91,8 +98,16 @@ class Lemming {
 		}
 		if (this.fall_distance > 0) {
 			this.frame = 0;
+			this.mode = 'walk';
 		}
 		this.fall_distance = 0;
+
+		// Consider actions
+		if (this.mode === 'digger') {
+			terrain.erase(bbox.x - 1, bbox.y + bbox.h, bbox.w + 2, 1);
+			this.y += 1;
+			return;
+		}
 
 		// Try scrambling downhill first, if that doesn't work try walking straight and then scrambling uphill
 		if (this.mode === 'walk') {
@@ -154,8 +169,16 @@ class Terrain {
 		return true;
 	}
 
-	get_image_data(x, y, w, h) {
-		return this.image_data.getImageData(x, y, w, h);
+	erase(x, y, w, h) {
+		const background = 0xff000000;
+		const data_view = new DataView(this.image_data.data.buffer);
+		const thisw = this.image_data.width;
+		for (let y1 = y; y1 < y + h; y1++) {
+			for (let x1 = x; x1 < x + w; x1++) {
+				let byte_offset = 4 * (y1 * thisw + x1);
+				data_view.setUint32(byte_offset, background, true);
+			}
+		}
 	}
 }
 
@@ -182,6 +205,28 @@ class Entrance {
 	}
 }
 
+class Button {
+	constructor(x, y, w, h, action) {
+		this.x = x;
+		this.y = y;
+		this.w = w;
+		this.h = h;
+		this.action = action;
+		this.selcted = false;
+	}
+
+	draw(ctx) {
+		ctx.fillStyle = this.selected ? '#fff' : '#800';
+		ctx.fillRect(this.x, this.y, this.w, this.h);
+		ctx.fillStyle = this.selected ? '#800' : '#fff';
+		ctx.fillText(this.action, this.x, this.y + 20);
+	}
+
+	contains(x, y) {
+		return x >= this.x && x < this.x + this.w && y >= this.y && y < this.y + this.h;
+	}
+}
+
 class Game {
 	constructor(canvas, terrain, sprites, entrance) {
 		this.canvas = canvas;
@@ -190,8 +235,12 @@ class Game {
 		this.sprites = sprites;
 		this.entrance = entrance;
 		this.lemmings = [];
+		this.sel_action = undefined;
 
 		this.timer = setInterval(() => this.tick(), TICK_INTERVAL);
+		this.buttons = [
+			new Button(0, 0, 100, 50, 'digger'),
+		];
 	}
 
 	static async load() {
@@ -236,6 +285,42 @@ class Game {
 		}
 		this.lemmings = next_lemmings;
 		this.draw_lemmings();
+		this.draw_buttons();
+	}
+
+	mousedown(x, y) {
+		let sel_button = false;
+		for (const button of this.buttons) {
+			if (button.contains(x, y)) {
+				this.sel_action = button.action;
+				sel_button = true;
+			}
+		}
+		if (sel_button) {
+			for (const button of this.buttons) {
+				button.selected = (this.sel_action === button.action);
+			}
+			return;
+		}
+
+		// Search lemmings in reverse order so the "top" one gets selected in preference
+		if (this.sel_action !== undefined) {
+			for (let i = this.lemmings.length - 1; i >= 0; i--) {
+				const lemming = this.lemmings[i];
+				if (lemming.state === 'alive' && lemming.contains(x, y)) {
+					lemming.mode = this.sel_action;
+					console.log(`Make lemming a ${lemming.mode}`);
+					return;
+				}
+			}
+		}
+	}
+
+	draw_buttons() {
+		const ctx = this.canvas.getContext('2d');
+		for (const button of this.buttons) {
+			button.draw(ctx);
+		}
 	}
 
 	erase_drawn_regions() {
@@ -283,6 +368,12 @@ function resize() {
 	}
 }
 
+function mousedown(e) {
+	if (the_game !== undefined) {
+		the_game.mousedown(e.offsetX, e.offsetY);
+	}
+}
+
 async function load() {
 	resize();
 	window.addEventListener('resize', resize);
@@ -295,6 +386,6 @@ window.onload = load;
 </script>
 </head>
 <body>
-<canvas id="canvas" width="100" height="100"></canvas>
+<canvas id="canvas" width="100" height="100" onmousedown="mousedown(event)"></canvas>
 </body>
 </html>
