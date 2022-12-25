@@ -12,7 +12,9 @@ body {
 
 let the_game = undefined;
 
-const TICK_INTERVAL = 150;
+const TICK_INTERVAL = 50;
+const LEMMING_BBOX_W = 15;
+const LEMMING_BBOX_H = 25;
 
 class Lemming {
 	constructor(x, y) {
@@ -28,7 +30,21 @@ class Lemming {
 		return 'walk0';
 	}
 
+	bounding_box() {
+		const x = this.x - Math.floor(LEMMING_BBOX_W / 2);
+		const y = this.y - LEMMING_BBOX_H;
+		const w = LEMMING_BBOX_W;
+		const h = LEMMING_BBOX_H;
+		return {x, y, w, h};
+	}
+
 	tick(terrain) {
+		const bbox = this.bounding_box();
+
+		if (terrain.rect_is_empty(bbox.x - 1, bbox.y + bbox.h, bbox.w + 2, 1)) {
+			// Lemming can fall
+			this.y += 1;
+		}
 	}
 }
 
@@ -61,6 +77,25 @@ class Terrain {
 	static async load(filename) {
 		const image_data = await load_image_data(filename);
 		return new Terrain(image_data);
+	}
+
+	rect_is_empty(x, y, w, h) {
+		const background = 0xff000000;
+		const data_view = new DataView(this.image_data.data.buffer);
+		const thisw = this.image_data.width;
+		for (let y1 = y; y1 < y + h; y1++) {
+			for (let x1 = x; x1 < x + w; x1++) {
+				let byte_offset = 4 * (y * thisw + x);
+				if (data_view.getUint32(byte_offset, true) !== background) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	get_image_data(x, y, w, h) {
+		return this.image_data.getImageData(x, y, w, h);
 	}
 }
 
@@ -109,7 +144,7 @@ class Game {
 			sprites[name] = await load_image_element(`sprites/${name}.png`);
 		}
 
-		const entrance = new Entrance(142, 203, 10, 20);
+		const entrance = new Entrance(142, 210, 10, 40);
 
 		return new Game(canvas, terrain, sprites, entrance);
 	}
@@ -148,14 +183,16 @@ class Game {
 
 	draw_lemmings() {
 		for (const lemming of this.lemmings) {
-			this.draw_sprite(lemming.get_sprite_name(), lemming.x, lemming.y);
+			this.draw_sprite_bottom_centre(lemming.get_sprite_name(), lemming.x, lemming.y);
 		}
 	}
 
-	draw_sprite(name, x, y) {
+	draw_sprite_bottom_centre(name, x, y) {
 		const image_element = this.sprites[name];
 		const w = image_element.width;
 		const h = image_element.height;
+		x -= Math.floor(w / 2);
+		y -= h;
 		this.drawn_regions.push({x, y, w, h});
 		const ctx = this.canvas.getContext('2d');
 		ctx.drawImage(image_element, x, y);
