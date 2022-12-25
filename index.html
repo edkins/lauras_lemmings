@@ -17,6 +17,8 @@ const LEMMING_BBOX_W = 15;
 const LEMMING_BBOX_H = 25;
 const SPLAT_DISTANCE = 250;
 const WALK_PERIOD = 14;
+const FALL_PERIOD = 4;
+const SPLAT_TIME = 6;
 
 class Lemming {
 	constructor(x, y) {
@@ -34,7 +36,13 @@ class Lemming {
 	}
 
 	get_sprite_name() {
-		return `walk${this.frame % WALK_PERIOD}`;
+		if (this.mode === 'splat') {
+			return `splat${this.frame}`;
+		} else if (this.fall_distance > 0) {
+			return `fall${this.frame % FALL_PERIOD}`;
+		} else {
+			return `walk${this.frame % WALK_PERIOD}`;
+		}
 	}
 
 	bounding_box() {
@@ -49,6 +57,14 @@ class Lemming {
 		const bbox = this.bounding_box();
 		const d = this.direction;
 
+		if (this.mode === 'splat') {
+			this.frame += 1;
+			if (this.frame >= SPLAT_TIME) {
+				this.state = 'dead';
+			}
+			return;
+		}
+
 		let fell = 0;
 		for (let offset = 1; offset <= 4; offset++) {
 			if (terrain.rect_is_empty(bbox.x - 1, bbox.y + bbox.h + offset, bbox.w + 2, 1)) {
@@ -60,13 +76,21 @@ class Lemming {
 		}
 		if (fell !== 0) {
 			this.y += fell;
+			if (this.fall_distance === 0) {
+				this.frame = 0;
+			}
 			this.fall_distance += fell;
+			this.frame += 1;
 			return;
 		}
 
 		if (this.fall_distance >= SPLAT_DISTANCE) {
-			this.state = 'dead';
+			this.mode = 'splat';
+			this.frame = 0;
 			return;
+		}
+		if (this.fall_distance > 0) {
+			this.frame = 0;
 		}
 		this.fall_distance = 0;
 
@@ -174,8 +198,14 @@ class Game {
 		const canvas = document.getElementById('canvas');
 		const terrain = await Terrain.load('maps/test_level.png');
 		const sprite_names = [];
-		for (let i = 0; i < 14; i++) {
+		for (let i = 0; i < WALK_PERIOD; i++) {
 			sprite_names.push(`walk${i}`);
+		}
+		for (let i = 0; i < FALL_PERIOD; i++) {
+			sprite_names.push(`fall${i}`);
+		}
+		for (let i = 0; i < SPLAT_TIME; i++) {
+			sprite_names.push(`splat${i}`);
 		}
 		const sprites = {};
 
