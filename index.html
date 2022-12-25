@@ -2,16 +2,55 @@
 <html>
 <head>
 <meta charset="utf-8">
+<style>
+body {
+	margin: 0px;
+}
+</style>
 <script>
 "use strict";
 
 let the_game = undefined;
+
+const TICK_INTERVAL = 150;
 
 class Lemming {
 	constructor(x, y) {
 		this.x = x;
 		this.y = y;
 	}
+
+	static new_faller(x, y) {
+		return new Lemming(x, y);
+	}
+
+	get_sprite_name() {
+		return 'walk0';
+	}
+
+	tick(terrain) {
+	}
+}
+
+async function load_image_data(filename) {
+	const img = new Image();
+	img.src = filename;
+	await img.decode();
+
+	const canvas = document.createElement('canvas');
+	canvas.width = img.width;
+	canvas.height = img.height;
+	const ctx = canvas.getContext('2d');
+	ctx.drawImage(img, 0, 0);
+
+	return ctx.getImageData(0, 0, img.width, img.height);
+}
+
+async function load_image_element(filename) {
+	const img = new Image();
+	img.src = filename;
+	await img.decode();
+	return img;
 }
 
 class Terrain {
@@ -19,42 +58,107 @@ class Terrain {
 		this.image_data = image_data;
 	}
 
-	static async load(width, height, filename) {
-		const img = new Image(width, height);
-		img.src = filename;
-		await img.decode();
-
-		const canvas = document.createElement('canvas');
-		canvas.width = width;
-		canvas.height = height;
-		const ctx = canvas.getContext('2d');
-		ctx.drawImage(img, 0, 0);
-
-		const image_data = ctx.getImageData(0, 0, width, height);
+	static async load(filename) {
+		const image_data = await load_image_data(filename);
 		return new Terrain(image_data);
 	}
 }
 
+class Entrance {
+	constructor(x, y, count, ticks) {
+		this.x = x;
+		this.y = y;
+		this.remaining_count = count;
+		this.ticks = ticks;
+		this.remaining_ticks = 0;
+	}
+
+	tick() {
+		const result = [];
+		if (this.remaining_count > 0 && this.remaining_ticks === 0) {
+			result.push(Lemming.new_faller(this.x, this.y));
+			this.remaining_ticks = this.ticks;
+			this.remaining_count -= 1;
+		}
+		if (this.remaining_ticks > 0) {
+			this.remaining_ticks -= 1;
+		}
+		return result;
+	}
+}
+
 class Game {
-	constructor(terrain) {
+	constructor(canvas, terrain, sprites, entrance) {
+		this.canvas = canvas;
 		this.terrain = terrain;
+		this.drawn_regions = [];
+		this.sprites = sprites;
+		this.entrance = entrance;
+		this.lemmings = [];
+
+		this.timer = setInterval(() => this.tick(), TICK_INTERVAL);
 	}
 
 	static async load() {
-		const width = 1000;
-		const height = 800;
-		const terrain = await Terrain.load(width, height, 'maps/test_level.png');
-		return new Game(terrain);
+		const canvas = document.getElementById('canvas');
+		const terrain = await Terrain.load('maps/test_level.png');
+		const sprite_names = ['walk0'];
+		const sprites = {};
+
+		for (const name of sprite_names) {
+			sprites[name] = await load_image_element(`sprites/${name}.png`);
+		}
+
+		const entrance = new Entrance(142, 203, 10, 20);
+
+		return new Game(canvas, terrain, sprites, entrance);
 	}
 
 	refresh() {
 		this.restore_from_terrain(0, 0, this.terrain.image_data.width, this.terrain.image_data.height);
 	}
 
+	tick() {
+		this.erase_drawn_regions();
+		for (const lemming of this.lemmings) {
+			lemming.tick(this.terrain);
+		}
+		for (const lemming of this.entrance.tick()) {
+			this.lemmings.push(lemming);
+		}
+		this.draw_lemmings();
+	}
+
+	erase_drawn_regions() {
+		for (let region of this.drawn_regions) {
+			this.restore_from_terrain(region.x, region.y, region.w, region.h);
+		}
+		this.drawn_regions = [];
+	}
+
 	restore_from_terrain(x, y, w, h) {
-		const canvas = document.getElementById('canvas');
-		const ctx = canvas.getContext('2d');
-		ctx.putImageData(this.terrain.image_data, x, y, x, y, w, h);
+		const ctx = this.canvas.getContext('2d');
+		ctx.putImageData(this.terrain.image_data, 0, 0, x, y, w, h);
+		ctx.fillStyle = '#888';
+		const tw = this.terrain.image_data.width;
+		const th = this.terrain.image_data.height;
+		ctx.fillRect(tw, 0, this.canvas.width - tw, th);
+		ctx.fillRect(0, th, this.canvas.width, this.canvas.height);
+	}
+
+	draw_lemmings() {
+		for (const lemming of this.lemmings) {
+			this.draw_sprite(lemming.get_sprite_name(), lemming.x, lemming.y);
+		}
+	}
+
+	draw_sprite(name, x, y) {
+		const image_element = this.sprites[name];
+		const w = image_element.width;
+		const h = image_element.height;
+		this.drawn_regions.push({x, y, w, h});
+		const ctx = this.canvas.getContext('2d');
+		ctx.drawImage(image_element, x, y);
 	}
 }
 
