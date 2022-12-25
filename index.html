@@ -15,6 +15,7 @@ let the_game = undefined;
 const TICK_INTERVAL = 50;
 const LEMMING_BBOX_W = 15;
 const LEMMING_BBOX_H = 25;
+const SPLAT_DISTANCE = 250;
 
 class Lemming {
 	constructor(x, y) {
@@ -22,6 +23,8 @@ class Lemming {
 		this.y = y;
 		this.direction = 1;
 		this.mode = 'walk';
+		this.state = 'alive';
+		this.fall_distance = 0;
 	}
 
 	static new_faller(x, y) {
@@ -44,11 +47,26 @@ class Lemming {
 		const bbox = this.bounding_box();
 		const d = this.direction;
 
-		if (terrain.rect_is_empty(bbox.x - 1, bbox.y + bbox.h, bbox.w + 2, 1)) {
-			// Lemming can fall
-			this.y += 1;
+		let fell = 0;
+		for (let offset = 1; offset <= 4; offset++) {
+			if (terrain.rect_is_empty(bbox.x - 1, bbox.y + bbox.h + offset, bbox.w + 2, 1)) {
+				// Lemming can fall at least this amount
+				fell = offset;
+			} else {
+				break;
+			}
+		}
+		if (fell !== 0) {
+			this.y += fell;
+			this.fall_distance += fell;
 			return;
 		}
+
+		if (this.fall_distance >= SPLAT_DISTANCE) {
+			this.state = 'dead';
+			return;
+		}
+		this.fall_distance = 0;
 
 		// Try scrambling downhill first, if that doesn't work try walking straight and then scrambling uphill
 		if (this.mode === 'walk') {
@@ -170,12 +188,17 @@ class Game {
 
 	tick() {
 		this.erase_drawn_regions();
+		const next_lemmings = [];
 		for (const lemming of this.lemmings) {
 			lemming.tick(this.terrain);
+			if (lemming.state === 'alive') {
+				next_lemmings.push(lemming);
+			}
 		}
 		for (const lemming of this.entrance.tick()) {
-			this.lemmings.push(lemming);
+			next_lemmings.push(lemming);
 		}
+		this.lemmings = next_lemmings;
 		this.draw_lemmings();
 	}
 
