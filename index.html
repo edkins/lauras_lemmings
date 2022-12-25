@@ -20,6 +20,8 @@ class Lemming {
 	constructor(x, y) {
 		this.x = x;
 		this.y = y;
+		this.direction = 1;
+		this.mode = 'walk';
 	}
 
 	static new_faller(x, y) {
@@ -40,10 +42,23 @@ class Lemming {
 
 	tick(terrain) {
 		const bbox = this.bounding_box();
+		const d = this.direction;
 
 		if (terrain.rect_is_empty(bbox.x - 1, bbox.y + bbox.h, bbox.w + 2, 1)) {
 			// Lemming can fall
 			this.y += 1;
+			return;
+		}
+
+		// Try scrambling downhill first, if that doesn't work try walking straight and then scrambling uphill
+		if (this.mode === 'walk') {
+			for (let offset = 2; offset >= -2; offset--) {
+				if (terrain.rect_is_empty(bbox.x + d, bbox.y + offset, bbox.w, bbox.h)) {
+					this.x += d;
+					this.y += offset;
+					return;
+				}
+			}
 		}
 	}
 }
@@ -85,7 +100,7 @@ class Terrain {
 		const thisw = this.image_data.width;
 		for (let y1 = y; y1 < y + h; y1++) {
 			for (let x1 = x; x1 < x + w; x1++) {
-				let byte_offset = 4 * (y * thisw + x);
+				let byte_offset = 4 * (y1 * thisw + x1);
 				if (data_view.getUint32(byte_offset, true) !== background) {
 					return false;
 				}
