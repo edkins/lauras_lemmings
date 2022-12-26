@@ -330,7 +330,7 @@ class Game {
 	}
 
 	refresh() {
-		this.restore_from_terrain(0, 0, this.terrain.image_data.width, this.terrain.image_data.height);
+		this.restore_from_terrain(0, 0, this.canvas.width, this.canvas.height);
 		this.draw_lemmings();
 		this.draw_borders();
 		this.draw_buttons();
@@ -422,12 +422,12 @@ class Game {
 
 	draw_borders() {
 		const ctx = this.canvas.getContext('2d');
-		ctx.fillStyle = '#444';
+		ctx.fillStyle = '#888';
 		const tw = this.terrain.image_data.width;
 		const th = this.terrain.image_data.height;
 		ctx.fillRect(0, 0, this.canvas.width, this.scrolly);
 		ctx.fillRect(0, this.scrolly, this.scrollx, this.canvas.height - this.scrolly);
-		ctx.fillRect(tw + this.scrollx, this.scrolly, this.canvas.width - tw, th);
+		ctx.fillRect(tw + this.scrollx, this.scrolly, this.canvas.width - tw - this.scrollx, th);
 		ctx.fillRect(0, th + this.scrolly, this.canvas.width, this.canvas.height);
 	}
 
