@@ -19,6 +19,8 @@ const SPLAT_DISTANCE = 250;
 const WALK_PERIOD = 14;
 const FALL_PERIOD = 4;
 const SPLAT_TIME = 11;
+const DIG_PERIOD = 14;
+const DIG_ADVANCE = [0,1,0,1,0,0,0,0,1,0,1,0,0,0];
 
 class Lemming {
 	constructor(x, y) {
@@ -40,6 +42,8 @@ class Lemming {
 			return `splat${this.frame}`;
 		} else if (this.fall_distance > 0) {
 			return `fall${this.frame % FALL_PERIOD}`;
+		} else if (this.mode === 'digger') {
+			return `dig${this.frame % DIG_PERIOD}`;
 		} else {
 			return `walk${this.frame % WALK_PERIOD}`;
 		}
@@ -53,9 +57,9 @@ class Lemming {
 		return {x, y, w, h};
 	}
 
-	contains(x, y) {
+	contains_mouse(x, y) {
 		const bbox = this.bounding_box();
-		return x >= bbox.x && x < bbox.x + bbox.w && y >= bbox.y && y < bbox.y + bbox.h;
+		return x >= bbox.x - 4 && x < bbox.x + bbox.w + 4 && y >= bbox.y - 4 && y < bbox.y + bbox.h + 4;
 	}
 
 	tick(terrain, exit) {
@@ -80,7 +84,7 @@ class Lemming {
 		// Consider falling
 		let fell = 0;
 		for (let offset = 1; offset <= 4; offset++) {
-			if (terrain.rect_is_empty(bbox.x, bbox.y + bbox.h + offset, bbox.w, 1)) {
+			if (terrain.rect_is_empty(bbox.x, bbox.y + bbox.h + offset - 1, bbox.w, 2)) {
 				// Lemming can fall at least this amount
 				fell = offset;
 			} else {
@@ -118,8 +122,10 @@ class Lemming {
 
 		// Consider actions
 		if (this.mode === 'digger') {
-			terrain.erase(bbox.x - 1, bbox.y + bbox.h - 1, bbox.w + 2, 3);
-			this.y += 1;
+			const adv = DIG_ADVANCE[this.frame % DIG_PERIOD];
+			terrain.erase(bbox.x - 3, bbox.y + bbox.h - 3, bbox.w + 6, 3 + adv);
+			this.y += adv;
+			this.frame += 1;
 			return;
 		}
 
@@ -232,7 +238,7 @@ class Button {
 		this.w = w;
 		this.h = h;
 		this.action = action;
-		this.selcted = false;
+		this.selected = false;
 	}
 
 	draw(ctx) {
@@ -290,6 +296,9 @@ class Game {
 		for (let i = 0; i < SPLAT_TIME; i++) {
 			sprite_names.push(`splat${i}`);
 		}
+		for (let i = 0; i < DIG_PERIOD; i++) {
+			sprite_names.push(`dig${i}`);
+		}
 		const sprites = {};
 
 		for (const name of sprite_names) {
@@ -342,8 +351,9 @@ class Game {
 		if (this.sel_action !== undefined) {
 			for (let i = this.lemmings.length - 1; i >= 0; i--) {
 				const lemming = this.lemmings[i];
-				if (lemming.state === 'alive' && lemming.contains(x, y)) {
+				if (lemming.state === 'alive' && lemming.contains_mouse(x, y)) {
 					lemming.mode = this.sel_action;
+					lemmind.frame = 0;
 					return;
 				}
 			}
