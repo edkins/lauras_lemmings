@@ -60,7 +60,7 @@ class Lemming {
 
 	contains_mouse(x, y) {
 		const bbox = this.bounding_box();
-		return x >= bbox.x - 4 && x < bbox.x + bbox.w + 4 && y >= bbox.y - 4 && y < bbox.y + bbox.h + 4;
+		return x >= bbox.x - 16 && x < bbox.x + bbox.w + 16 && y >= bbox.y - 16 && y < bbox.y + bbox.h + 16;
 	}
 
 	tick(terrain, exit) {
@@ -366,15 +366,25 @@ class Game {
 		}
 
 		// Search lemmings in reverse order so the "top" one gets selected in preference
+		let sel_lemming = undefined;
+		let sel_distance = 0;
 		if (this.sel_action !== undefined) {
 			for (let i = this.lemmings.length - 1; i >= 0; i--) {
 				const lemming = this.lemmings[i];
-				if (lemming.state === 'alive' && lemming.contains_mouse(x, y)) {
-					lemming.mode = this.sel_action;
-					lemmind.frame = 0;
-					return;
+				const distance = Math.sqrt((lemming.x - x) * (lemming.x - x) + (lemming.y - y) * (lemming.y - y));
+				if (lemming.state === 'alive' && lemming.contains_mouse(x, y) && lemming.mode !== this.sel_action) {
+					if (sel_lemming === undefined || sel_distance < distance) {
+						sel_distance = distance;
+						sel_lemming = lemming;
+					}
 				}
 			}
+		}
+
+		if (sel_lemming !== undefined) {
+			sel_lemming.mode = this.sel_action;
+			sel_lemming.frame = 0;
+			return;
 		}
 	}
 
