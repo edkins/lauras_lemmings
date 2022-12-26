@@ -139,6 +139,10 @@ class Lemming {
 					return;
 				}
 			}
+
+			// No choice but to reverse direction
+			this.direction = -this.direction;
+			return;
 		}
 	}
 }
@@ -386,11 +390,11 @@ class Game {
 
 	draw_lemmings() {
 		for (const lemming of this.lemmings) {
-			this.draw_sprite_bottom_centre(lemming.get_sprite_name(), lemming.x, lemming.y);
+			this.draw_sprite_bottom_centre(lemming.get_sprite_name(), lemming.x, lemming.y, lemming.direction);
 		}
 	}
 
-	draw_sprite_bottom_centre(name, x, y) {
+	draw_sprite_bottom_centre(name, x, y, direction) {
 		const image_element = this.sprites[name];
 		let w = image_element.width;
 		let h = image_element.height;
@@ -418,8 +422,14 @@ class Game {
 		if (y + h > ch) {
 			h = ch - y;
 		}
-		if (w > 0 && h > 0) {
-			ctx.drawImage(image_element, sx, sy, w, h, x, y, w, h);
+		let sw = w;
+		let sh = h;
+		if (direction < 0) {
+			ctx.scale(-1, 1);
+			ctx.drawImage(image_element, sx, sy, sw, sh, -x, y, -w, h);
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+		} else {
+			ctx.drawImage(image_element, sx, sy, sw, sh, x, y, w, h);
 		}
 	}
 }
