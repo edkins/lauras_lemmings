@@ -519,8 +519,8 @@ function touchstart(e) {
 	for (let i = 0; i < e.targetTouches.length; i++) {
 		const touch = e.targetTouches[i];
 		touch_coord_by_id[touch.identifier] = {
-			x: touch.pageX,
-			y: touch.pageY,
+			x: Math.floor(touch.pageX),
+			y: Math.floor(touch.pageY),
 		};
 	}
 }
@@ -531,13 +531,13 @@ function touchmove(e) {
 	for (let i = 0; i < e.targetTouches.length; i++) {
 		const touch = e.targetTouches[i];
 		if (touch.identifier in touch_coord_by_id) {
-			dx += touch.pageX - touch_coord_by_id[touch.identifier].x;
-			dy += touch.pageY - touch_coord_by_id[touch.identifier].y;
+			dx += Math.floor(touch.pageX) - touch_coord_by_id[touch.identifier].x;
+			dy += Math.floor(touch.pageY) - touch_coord_by_id[touch.identifier].y;
 		}
 		touch_coord_by_id[touch.identifer] = {
-			x: touch.pageX,
-			y: touch.pageY,
-		}
+			x: Math.floor(touch.pageX),
+			y: Math.floor(touch.pageY),
+		};
 	}
 	if (the_game !== undefined) {
 		the_game.mousedrag(dx, dy);
