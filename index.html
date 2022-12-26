@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <style>
 body {
+	background: black;
 	margin: 0px;
 }
 </style>
@@ -147,18 +148,18 @@ class Lemming {
 	}
 }
 
-async function load_image_data(filename) {
+async function load_image_data(filename, scale) {
 	const img = new Image();
 	img.src = filename;
 	await img.decode();
 
 	const canvas = document.createElement('canvas');
-	canvas.width = img.width;
-	canvas.height = img.height;
+	canvas.width = img.width * scale;
+	canvas.height = img.height * scale;
 	const ctx = canvas.getContext('2d');
-	ctx.drawImage(img, 0, 0);
+	ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, canvas.width, canvas.height);
 
-	return ctx.getImageData(0, 0, img.width, img.height);
+	return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
 async function load_image_element(filename) {
@@ -169,16 +170,21 @@ async function load_image_element(filename) {
 }
 
 class Terrain {
-	constructor(image_data) {
+	constructor(image_data, scale) {
 		this.image_data = image_data;
+		this.scale = scale;
 	}
 
-	static async load(filename) {
-		const image_data = await load_image_data(filename);
-		return new Terrain(image_data);
+	static async load(filename, scale) {
+		const image_data = await load_image_data(filename, scale);
+		return new Terrain(image_data, scale);
 	}
 
 	rect_is_empty(x, y, w, h) {
+		x *= this.scale;
+		y *= this.scale;
+		w *= this.scale;
+		h *= this.scale;
 		const background = 0xff000000;
 		const data_view = new DataView(this.image_data.data.buffer);
 		const thisw = this.image_data.width;
@@ -197,6 +203,10 @@ class Terrain {
 	}
 
 	erase(x, y, w, h) {
+		x *= this.scale;
+		y *= this.scale;
+		w *= this.scale;
+		h *= this.scale;
 		const background = 0xff000000;
 		const data_view = new DataView(this.image_data.data.buffer);
 		const thisw = this.image_data.width;
@@ -271,7 +281,7 @@ class Exit {
 }
 
 class Game {
-	constructor(canvas, terrain, sprites, entrance, exit) {
+	constructor(canvas, terrain, sprites, entrance, exit, scale) {
 		this.canvas = canvas;
 		this.terrain = terrain;
 		this.drawn_regions = [];
@@ -280,6 +290,7 @@ class Game {
 		this.exit = exit;
 		this.lemmings = [];
 		this.sel_action = undefined;
+		this.scale = scale;
 
 		this.timer = setInterval(() => this.tick(), TICK_INTERVAL);
 		this.buttons = [
@@ -289,7 +300,8 @@ class Game {
 
 	static async load() {
 		const canvas = document.getElementById('canvas');
-		const terrain = await Terrain.load('maps/test_level.png');
+		const scale = scaling_factor();
+		const terrain = await Terrain.load('maps/test_level.png', scale);
 		const sprite_names = [];
 		for (let i = 0; i < WALK_PERIOD; i++) {
 			sprite_names.push(`walk${i}`);
@@ -312,7 +324,7 @@ class Game {
 		const entrance = new Entrance(142, 210, 10, 40);
 		const exit = new Exit(800, 674, 8, 8);
 
-		return new Game(canvas, terrain, sprites, entrance, exit);
+		return new Game(canvas, terrain, sprites, entrance, exit, scale);
 	}
 
 	refresh() {
@@ -337,6 +349,8 @@ class Game {
 	}
 
 	mousedown(x, y) {
+		x /= this.scale;
+		y /= this.scale;
 		let sel_button = false;
 		for (const button of this.buttons) {
 			if (button.contains(x, y)) {
@@ -379,6 +393,10 @@ class Game {
 	}
 
 	restore_from_terrain(x, y, w, h) {
+		x *= this.scale;
+		y *= this.scale;
+		w *= this.scale;
+		h *= this.scale;
 		const ctx = this.canvas.getContext('2d');
 		ctx.putImageData(this.terrain.image_data, 0, 0, x, y, w, h);
 		ctx.fillStyle = '#888';
@@ -424,20 +442,25 @@ class Game {
 		}
 		let sw = w;
 		let sh = h;
+		let scale = this.scale;
 		if (direction < 0) {
 			ctx.scale(-1, 1);
-			ctx.drawImage(image_element, sx, sy, sw, sh, -x, y, -w, h);
+			ctx.drawImage(image_element, sx, sy, sw, sh, -x * scale, y * scale, -w * scale, h * scale);
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 		} else {
-			ctx.drawImage(image_element, sx, sy, sw, sh, x, y, w, h);
+			ctx.drawImage(image_element, sx, sy, sw, sh, x * scale, y * scale, w * scale, h * scale);
 		}
 	}
+}
+
+function scaling_factor() {
+	return 2;
 }
 
 function resize() {
 	const canvas = document.getElementById('canvas');
 	canvas.width = window.innerWidth;
-	canvas.height = window.innerHeight;
+	canvas.height = window.innerHeight - 6;
 
 	if (the_game !== undefined) {
 		the_game.refresh();
