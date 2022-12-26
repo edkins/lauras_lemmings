@@ -421,12 +421,14 @@ class Game {
 	}
 
 	draw_borders() {
+		const ctx = this.canvas.getContext('2d');
 		ctx.fillStyle = '#888';
 		const tw = this.terrain.image_data.width;
 		const th = this.terrain.image_data.height;
 		ctx.fillRect(0, 0, this.canvas.width, this.scrolly);
-		//ctx.fillRect(tw, 0, this.canvas.width - tw, th);
-		//ctx.fillRect(0, th, this.canvas.width, this.canvas.height);
+		ctx.fillRect(0, this.scrolly, this.scrollx, this.canvas.height - this.scrolly);
+		ctx.fillRect(tw + this.scrollx, this.scrolly, this.canvas.width - tw, th);
+		ctx.fillRect(0, th + this.scrolly, this.canvas.width, this.canvas.height);
 	}
 
 	restore_from_terrain(x, y, w, h) {
