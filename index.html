@@ -291,6 +291,8 @@ class Game {
 		this.lemmings = [];
 		this.sel_action = undefined;
 		this.scale = scale;
+		this.scrollx = 0;
+		this.scrolly = 0;
 
 		this.timer = setInterval(() => this.tick(), TICK_INTERVAL);
 		this.buttons = [
@@ -329,6 +331,9 @@ class Game {
 
 	refresh() {
 		this.restore_from_terrain(0, 0, this.terrain.image_data.width, this.terrain.image_data.height);
+		this.draw_lemmings();
+		this.draw_borders();
+		this.draw_buttons();
 	}
 
 	tick() {
@@ -349,12 +354,14 @@ class Game {
 	}
 
 	mousedown(x, y) {
-		x /= this.scale;
-		y /= this.scale;
 		let sel_button = false;
 		for (const button of this.buttons) {
 			if (button.contains(x, y)) {
-				this.sel_action = button.action;
+				if (button.selected) {
+					this.sel_action = undefined;
+				} else {
+					this.sel_action = button.action;
+				}
 				sel_button = true;
 			}
 		}
@@ -364,6 +371,11 @@ class Game {
 			}
 			return;
 		}
+
+		x -= this.scrollx;
+		y -= this.scrolly;
+		x /= this.scale;
+		y /= this.scale;
 
 		// Search lemmings in reverse order so the "top" one gets selected in preference
 		let sel_lemming = undefined;
@@ -388,6 +400,12 @@ class Game {
 		}
 	}
 
+	mousedrag(dx, dy) {
+		this.scrollx += dx;
+		this.scrolly += dy;
+		this.refresh();
+	}
+
 	draw_buttons() {
 		const ctx = this.canvas.getContext('2d');
 		for (const button of this.buttons) {
@@ -402,18 +420,18 @@ class Game {
 		this.drawn_regions = [];
 	}
 
-	restore_from_terrain(x, y, w, h) {
-		x *= this.scale;
-		y *= this.scale;
-		w *= this.scale;
-		h *= this.scale;
-		const ctx = this.canvas.getContext('2d');
-		ctx.putImageData(this.terrain.image_data, 0, 0, x, y, w, h);
+	draw_borders() {
 		ctx.fillStyle = '#888';
 		const tw = this.terrain.image_data.width;
 		const th = this.terrain.image_data.height;
-		ctx.fillRect(tw, 0, this.canvas.width - tw, th);
-		ctx.fillRect(0, th, this.canvas.width, this.canvas.height);
+		ctx.fillRect(0, 0, this.canvas.width, this.scrolly);
+		//ctx.fillRect(tw, 0, this.canvas.width - tw, th);
+		//ctx.fillRect(0, th, this.canvas.width, this.canvas.height);
+	}
+
+	restore_from_terrain(x, y, w, h) {
+		const ctx = this.canvas.getContext('2d');
+		ctx.putImageData(this.terrain.image_data, this.scrollx, this.scrolly, x - this.scrollx, y - this.scrolly, w, h);
 	}
 
 	draw_lemmings() {
@@ -424,10 +442,17 @@ class Game {
 
 	draw_sprite_bottom_centre(name, x, y, direction) {
 		const image_element = this.sprites[name];
-		let w = image_element.width;
-		let h = image_element.height;
-		x -= Math.floor(w / 2);
-		y -= h;
+		const scale = this.scale;
+		let sw = image_element.width;
+		let sh = image_element.height;
+		x -= Math.floor(sw / 2);
+		y -= sh;
+		let w = sw * scale;
+		let h = sh * scale;
+		x *= scale;
+		y *= scale;
+		x += this.scrollx;
+		y += this.scrolly;
 		this.drawn_regions.push({x, y, w, h});
 		const cw = this.terrain.image_data.width;
 		const ch = this.terrain.image_data.height;
@@ -435,12 +460,12 @@ class Game {
 		let sx = 0;
 		let sy = 0;
 		if (x < 0) {
-			sx = -x;
+			sx = -x / scale;
 			w += x;
 			x = 0;
 		}
 		if (y < 0) {
-			sy = -y;
+			sy = -y / scale;
 			h += y;
 			y = 0;
 		}
@@ -450,15 +475,12 @@ class Game {
 		if (y + h > ch) {
 			h = ch - y;
 		}
-		let sw = w;
-		let sh = h;
-		let scale = this.scale;
 		if (direction < 0) {
 			ctx.scale(-1, 1);
-			ctx.drawImage(image_element, sx, sy, sw, sh, -x * scale, y * scale, -w * scale, h * scale);
+			ctx.drawImage(image_element, sx, sy, sw, sh, -x, y, -w, h);
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 		} else {
-			ctx.drawImage(image_element, sx, sy, sw, sh, x * scale, y * scale, w * scale, h * scale);
+			ctx.drawImage(image_element, sx, sy, sw, sh, x, y, w, h);
 		}
 	}
 }
@@ -483,6 +505,12 @@ function mousedown(e) {
 	}
 }
 
+function mousemove(e) {
+	if (the_game !== undefined && e.buttons) {
+		the_game.mousedrag(e.movementX, e.movementY);
+	}
+}
+
 async function load() {
 	resize();
 	window.addEventListener('resize', resize);
@@ -495,6 +523,6 @@ window.onload = load;
 </script>
 </head>
 <body>
-<canvas id="canvas" width="100" height="100" onmousedown="mousedown(event)"></canvas>
+<canvas id="canvas" width="100" height="100" onmousedown="mousedown(event)" onmousemove="mousemove(event)"></canvas>
 </body>
 </html>
