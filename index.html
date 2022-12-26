@@ -531,8 +531,8 @@ function touchmove(e) {
 	for (let i = 0; i < e.targetTouches.length; i++) {
 		const touch = e.targetTouches[i];
 		if (touch.identifier in touch_coord_by_id) {
-			dx += Math.floor(touch.pageX) - touch_coord_by_id[touch.identifier].x;
-			dy += Math.floor(touch.pageY) - touch_coord_by_id[touch.identifier].y;
+			dx = Math.floor(touch.pageX) - touch_coord_by_id[touch.identifier].x;
+			dy = Math.floor(touch.pageY) - touch_coord_by_id[touch.identifier].y;
 		}
 		touch_coord_by_id[touch.identifer] = {
 			x: Math.floor(touch.pageX),
