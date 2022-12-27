@@ -32,8 +32,10 @@ const BASH_PERIOD = 13;
 const BRICK_COLOR = 0xff5ecfff;
 const BUILD_PERIOD = 19;
 const BUILD_TICK = 9;
-const BUILD_ADVANCE_X = [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0];
+const BUILD_ADVANCE_X = [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0];
 const BUILD_ADVANCE_Y = [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0];
+const SHRUG_TIME = 10;
+const SHRUG_TICK = 15;
 
 class Lemming {
 	constructor(x, y) {
@@ -44,6 +46,7 @@ class Lemming {
 		this.state = 'alive';
 		this.fall_distance = 0;
 		this.frame = 0;
+		this.bricks = 0;
 	}
 
 	static new_faller(x, y) {
@@ -53,6 +56,8 @@ class Lemming {
 	get_sprite_name() {
 		if (this.mode === 'splat') {
 			return `splat${this.frame}`;
+		} else if (this.mode === 'shrug') {
+			return `shrug${this.frame}`;
 		} else if (this.fall_distance > 0) {
 			return `fall${this.frame % FALL_PERIOD}`;
 		} else if (this.mode === 'builder') {
@@ -139,19 +144,36 @@ class Lemming {
 			return;
 		}
 
+		// Consider post-build shrug
+		if (this.mode === 'shrug') {
+			this.frame += 1;
+			if (this.frame >= SHRUG_TIME) {
+				this.frame = 0;
+				this.mode = 'walk';
+			}
+			return;
+		}
+
 		// Consider actions
 		if (this.mode === 'builder') {
 			const f = this.frame % BUILD_PERIOD;
 			this.frame += 1;
+			if (this.bricks <= 0 && f === SHRUG_TICK) {
+				this.mode = 'shrug';
+				this.frame = 0;
+				return;
+			}
 			if (this.direction > 0) {
 				this.x += BUILD_ADVANCE_X[f];
 				if (f === BUILD_TICK) {
-					terrain.fill(this.x + 4, this.y, 10, 1, BRICK_COLOR);
+					terrain.fill(this.x + 3, this.y, 10, 1, BRICK_COLOR);
+					this.bricks -= 1;
 				}
 			} else {
 				this.x -= BUILD_ADVANCE_X[f];
 				if (f === BUILD_TICK) {
 					terrain.fill(this.x - 13, this.y, 10, 1, BRICK_COLOR);
+					this.bricks -= 1;
 				}
 			}
 			this.y -= BUILD_ADVANCE_Y[f];
@@ -387,6 +409,9 @@ class Game {
 		for (let i = 0; i < SPLAT_TIME; i++) {
 			sprite_names.push(`splat${i}`);
 		}
+		for (let i = 0; i < SHRUG_TIME; i++) {
+			sprite_names.push(`shrug${i}`);
+		}
 		for (let i = 0; i < BUILD_PERIOD; i++) {
 			sprite_names.push(`build${i}`);
 		}
@@ -478,7 +503,10 @@ class Game {
 			}
 		}
 
-		if (sel_lemming !== undefined) {
+		if (sel_lemming !== undefined && sel_lemming.mode !== this.sel_action) {
+			if (this.sel_action === 'builder') {
+				sel_lemming.bricks = 12;
+			}
 			sel_lemming.mode = this.sel_action;
 			sel_lemming.frame = 0;
 			return;
@@ -533,7 +561,7 @@ class Game {
 		let sw = image_element.width;
 		let sh = image_element.height;
 		x -= Math.floor(sw / 2);
-		y -= sh;
+		y -= sh - 1;
 		let w = sw * scale;
 		let h = sh * scale;
 		x *= scale;
