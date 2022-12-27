@@ -22,9 +22,9 @@ const FALL_PERIOD = 4;
 const SPLAT_TIME = 11;
 const DIG_PERIOD = 14;
 const DIG_ADVANCE = [0,1,0,1,0,0,0,0,1,0,1,0,0,0];
-const MINE_ADVANCE_X = [0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0];
-const MINE_ADVANCE_Y = [0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0];
-const MINE_BOX_X = [5,6,7,10,14,17,20,20,20,19,20,20,17,14,10,7,6];
+const MINE_ADVANCE_X = [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0];
+const MINE_ADVANCE_Y = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0];
+const MINE_BOX_X = [5,6,7,10,14,17,20,20,19,19,20,20,17,14,10,7,6];
 const MINE_BOX_Y = [8,7,8, 9, 9,11,14,19,20,20,18,14,11, 9, 9,8,7];
 const MINE_PERIOD = 17;
 
@@ -193,6 +193,7 @@ class Terrain {
 	constructor(image_data, scale) {
 		this.image_data = image_data;
 		this.scale = scale;
+		this.dirty = [];
 	}
 
 	static async load(filename, scale) {
@@ -239,6 +240,13 @@ class Terrain {
 				}
 			}
 		}
+		this.dirty.push({x, y, w, h});
+	}
+
+	take_dirty() {
+		const result = this.dirty;
+		this.dirty = [];
+		return result;
 	}
 }
 
@@ -373,6 +381,9 @@ class Game {
 			next_lemmings.push(lemming);
 		}
 		this.lemmings = next_lemmings;
+		for (const rect of this.terrain.take_dirty()) {
+			this.restore_from_terrain(rect.x, rect.y, rect.w, rect.h);
+		}
 		this.draw_lemmings();
 		this.draw_buttons();
 	}
@@ -485,15 +496,15 @@ class Game {
 		const ctx = this.canvas.getContext('2d');
 		let sx = 0;
 		let sy = 0;
-		if (x < 0) {
-			sx = -x / scale;
-			w += x;
-			x = 0;
+		if (x < this.scrollx) {
+			sx = (x - this.scrollx) / scale;
+			w += x - this.scrollx;
+			x = this.scrollx;
 		}
-		if (y < 0) {
-			sy = -y / scale;
-			h += y;
-			y = 0;
+		if (y < this.scrolly) {
+			sy = (y - this.scrolly) / scale;
+			h += y - this.scrolly;
+			y = this.scrolly;
 		}
 		if (x + w > cw) {
 			w = cw - x;
