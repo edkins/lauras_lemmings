@@ -29,6 +29,11 @@ const MINE_BOX_Y = [8,7,8, 9, 9,11,14,19,20,20,18,14,11, 9, 9,8,7];
 const MINE_PERIOD = 17;
 const BASH_ADVANCE = [0,0,0,0,1,1,0,0,0,0,0,0,0];
 const BASH_PERIOD = 13;
+const BRICK_COLOR = 0xff5ecfff;
+const BUILD_PERIOD = 19;
+const BUILD_TICK = 9;
+const BUILD_ADVANCE_X = [0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0];
+const BUILD_ADVANCE_Y = [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0];
 
 class Lemming {
 	constructor(x, y) {
@@ -50,6 +55,8 @@ class Lemming {
 			return `splat${this.frame}`;
 		} else if (this.fall_distance > 0) {
 			return `fall${this.frame % FALL_PERIOD}`;
+		} else if (this.mode === 'builder') {
+			return `build${this.frame % BUILD_PERIOD}`;
 		} else if (this.mode === 'basher') {
 			return `bash${this.frame % BASH_PERIOD}`;
 		} else if (this.mode === 'miner') {
@@ -133,6 +140,23 @@ class Lemming {
 		}
 
 		// Consider actions
+		if (this.mode === 'builder') {
+			const f = this.frame % BUILD_PERIOD;
+			this.frame += 1;
+			if (this.direction > 0) {
+				this.x += BUILD_ADVANCE_X[f];
+				if (f === BUILD_TICK) {
+					terrain.fill(this.x + 4, this.y, 10, 1, BRICK_COLOR);
+				}
+			} else {
+				this.x -= BUILD_ADVANCE_X[f];
+				if (f === BUILD_TICK) {
+					terrain.fill(this.x - 13, this.y, 10, 1, BRICK_COLOR);
+				}
+			}
+			this.y -= BUILD_ADVANCE_Y[f];
+			return;
+		}
 		if (this.mode === 'basher') {
 			this.frame += 1;
 			if (this.direction > 0) {
@@ -239,11 +263,14 @@ class Terrain {
 	}
 
 	erase(x, y, w, h) {
+		this.fill(x, y, w, h, 0xff000000);
+	}
+
+	fill(x, y, w, h, color) {
 		x *= this.scale;
 		y *= this.scale;
 		w *= this.scale;
 		h *= this.scale;
-		const background = 0xff000000;
 		const data_view = new DataView(this.image_data.data.buffer);
 		const thisw = this.image_data.width;
 		const thish = this.image_data.height;
@@ -251,7 +278,7 @@ class Terrain {
 			for (let x1 = x; x1 < x + w; x1++) {
 				if (x1 >= 0 && x1 < thisw && y1 >= 0 && y1 < thish) {
 					let byte_offset = 4 * (y1 * thisw + x1);
-					data_view.setUint32(byte_offset, background, true);
+					data_view.setUint32(byte_offset, color, true);
 				}
 			}
 		}
@@ -339,9 +366,10 @@ class Game {
 
 		this.timer = setInterval(() => this.tick(), TICK_INTERVAL);
 		this.buttons = [
-			new Button(0, 0, 100, 50, 'basher'),
-			new Button(100, 0, 100, 50, 'miner'),
-			new Button(200, 0, 100, 50, 'digger'),
+			new Button(0, 0, 100, 50, 'builder'),
+			new Button(100, 0, 100, 50, 'basher'),
+			new Button(200, 0, 100, 50, 'miner'),
+			new Button(300, 0, 100, 50, 'digger'),
 		];
 	}
 
@@ -358,6 +386,9 @@ class Game {
 		}
 		for (let i = 0; i < SPLAT_TIME; i++) {
 			sprite_names.push(`splat${i}`);
+		}
+		for (let i = 0; i < BUILD_PERIOD; i++) {
+			sprite_names.push(`build${i}`);
 		}
 		for (let i = 0; i < BASH_PERIOD; i++) {
 			sprite_names.push(`bash${i}`);
