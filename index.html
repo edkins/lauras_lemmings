@@ -40,6 +40,7 @@ const BOMB_PERIOD = Math.floor(1000 / TICK_INTERVAL);
 const OHNO_PERIOD = 4;
 const OHNO_TIME = 15;
 const EXPLOSION_TIME = Math.floor(3000 / TICK_INTERVAL);
+const BACKGROUND = 0xff000000;
 
 class Lemming {
 	constructor(x, y) {
@@ -125,7 +126,7 @@ class Lemming {
 		}
 
 		// Consider whether it's fallen off the edge
-		if (this.x < 0 || this.x >= terrain.image_data.width || this.y < 0 || this.y - bbox.h >= terrain.image_data.height) {
+		if (this.x < 0 || this.x >= terrain.width || this.y < 0 || this.y - bbox.h >= terrain.height) {
 			this.state = 'gone';
 			return;
 		}
@@ -289,9 +290,30 @@ async function load_image_element(filename) {
 	return img;
 }
 
+function int_to_color(n) {
+	const r = n & 0xff;
+	const g = (n >> 8) & 0xff;
+	const b = (n >> 16) & 0xff;
+	return `rgb(${r},${g},${b})`;
+}
+
 class Terrain {
 	constructor(image_data, scale) {
-		this.image_data = image_data;
+		this.width = image_data.width;
+		this.height = image_data.height;
+		this.walls = new Uint8Array(this.width * this.height);
+		const data_view = new DataView(image_data.data.buffer);
+		for (let i = 0; i < this.width * this.height; i++) {
+			const pixel = data_view.getUint32(4 * i, true);
+			if (pixel === BACKGROUND) {
+				this.walls[i] = 0;
+			} else {
+				this.walls[i] = 1;
+			}
+		}
+		this.offscreen_canvas = new OffscreenCanvas(this.width, this.height);
+		this.offscreen_ctx = this.offscreen_canvas.getContext('2d');
+		this.offscreen_ctx.putImageData(image_data, 0, 0);
 		this.scale = scale;
 		this.dirty = [];
 	}
@@ -301,40 +323,18 @@ class Terrain {
 		return new Terrain(image_data, scale);
 	}
 
-	get_sub_data(x, y, w, h) {
-		const a = new Uint8ClampedArray(4 * w * h);
-		const thisw = this.image_data.width;
-		const thish = this.image_data.height;
-		if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > thisw || y + h > thish) {
-			throw `Bad dimensions in get_sub_data ${x} ${y} ${w} ${h} ${thisw} ${thish}`;
-		}
-		const d = this.image_data.data;
-		for (let y1 = 0; y1 < h; y1++) {
-			for (let x1 = 0; x1 < w; x1++) {
-				for (let k = 0; k < 4; k++) {
-					let src_offset = 4 * ((y1 + y) * thisw + x1 + x) + k;
-					let dst_offset = 4 * (y1 * w + x1) + k;
-					a[dst_offset] = d[src_offset];
-				}
-			}
-		}
-		return new ImageData(a, w, h);
-	}
-
 	rect_is_empty(x, y, w, h) {
 		x *= this.scale;
 		y *= this.scale;
 		w *= this.scale;
 		h *= this.scale;
-		const background = 0xff000000;
-		const data_view = new DataView(this.image_data.data.buffer);
-		const thisw = this.image_data.width;
-		const thish = this.image_data.height;
+		const thisw = this.width;
+		const thish = this.height;
 		for (let y1 = y; y1 < y + h; y1++) {
 			for (let x1 = x; x1 < x + w; x1++) {
 				if (x1 >= 0 && x1 < thisw && y1 >= 0 && y1 < thish) {
-					let byte_offset = 4 * (y1 * thisw + x1);
-					if (data_view.getUint32(byte_offset, true) !== background) {
+					let byte_offset = y1 * thisw + x1;
+					if (this.walls[byte_offset] !== 0) {
 						return false;
 					}
 				}
@@ -344,7 +344,7 @@ class Terrain {
 	}
 
 	erase(x, y, w, h) {
-		this.fill(x, y, w, h, 0xff000000);
+		this.fill(x, y, w, h, BACKGROUND);
 	}
 
 	crater(x, y) {
@@ -356,21 +356,23 @@ class Terrain {
 	}
 
 	fill(x, y, w, h, color) {
+		const wall = (color === BACKGROUND) ? 0 : 1;
 		x *= this.scale;
 		y *= this.scale;
 		w *= this.scale;
 		h *= this.scale;
-		const data_view = new DataView(this.image_data.data.buffer);
-		const thisw = this.image_data.width;
-		const thish = this.image_data.height;
+		const thisw = this.width;
+		const thish = this.height;
 		for (let y1 = y; y1 < y + h; y1++) {
 			for (let x1 = x; x1 < x + w; x1++) {
 				if (x1 >= 0 && x1 < thisw && y1 >= 0 && y1 < thish) {
-					let byte_offset = 4 * (y1 * thisw + x1);
-					data_view.setUint32(byte_offset, color, true);
+					let byte_offset = y1 * thisw + x1;
+					this.walls[byte_offset] = wall;
 				}
 			}
 		}
+		this.offscreen_ctx.fillStyle = int_to_color(color);
+		this.offscreen_ctx.fillRect(x, y, w, h);
 		this.dirty.push({x, y, w, h});
 	}
 
@@ -518,7 +520,7 @@ class Game {
 	}
 
 	refresh() {
-		this.ctx.putImageData(this.terrain.image_data, this.scrollx, this.scrolly, -this.scrollx, -this.scrolly, this.canvas.width, this.canvas.height);
+		this.ctx.drawImage(this.terrain.offscreen_canvas, -this.scrollx, -this.scrolly, this.canvas.width, this.canvas.height, 0, 0, this.canvas.width, this.canvas.height);
 		this.draw_lemmings();
 		this.draw_borders();
 		this.draw_buttons();
@@ -643,8 +645,8 @@ class Game {
 	draw_borders() {
 		const ctx = this.ctx;
 		ctx.fillStyle = '#888';
-		const tw = this.terrain.image_data.width;
-		const th = this.terrain.image_data.height;
+		const tw = this.terrain.width;
+		const th = this.terrain.height;
 		ctx.fillRect(0, 0, this.canvas.width, this.scrolly);
 		ctx.fillRect(0, this.scrolly, this.scrollx, this.canvas.height - this.scrolly);
 		ctx.fillRect(tw + this.scrollx, this.scrolly, this.canvas.width - tw - this.scrollx, th);
@@ -653,12 +655,11 @@ class Game {
 
 	restore_from_terrain(x, y, w, h) {
 		const ctx = this.ctx;
-		if (x < 0 || y < 0 || x + w > this.terrain.image_data.width || y + h > this.terrain.image_data.height) {
+		if (x < 0 || y < 0 || x + w > this.terrain.width || y + h > this.terrain.height) {
 			throw `Bad dimensions in restore_from_terrain ${x} ${y} ${w} ${h}`;
 		}
 		if (w > 0 && h > 0) {
-			const image_data = this.terrain.get_sub_data(x, y, w, h);
-			ctx.putImageData(image_data, x + this.scrollx, y + this.scrolly);
+			ctx.drawImage(this.terrain.offscreen_canvas, x, y, w, h, x + this.scrollx, y + this.scrolly, w, h);
 		}
 	}
 
@@ -700,8 +701,8 @@ class Game {
 		y += this.scrolly;
 		let w = 4;
 		let h = 4;
-		const cw = this.terrain.image_data.width;
-		const ch = this.terrain.image_data.height;
+		const cw = this.terrain.width;
+		const ch = this.terrain.height;
 		const ctx = this.ctx;
 		if (x < this.scrollx) {
 			w += x - this.scrollx;
@@ -745,8 +746,8 @@ class Game {
 		y *= scale;
 		x += this.scrollx;
 		y += this.scrolly;
-		const cw = this.terrain.image_data.width;
-		const ch = this.terrain.image_data.height;
+		const cw = this.terrain.width;
+		const ch = this.terrain.height;
 		const ctx = this.ctx;
 		let sx = 0;
 		let sy = 0;
