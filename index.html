@@ -36,6 +36,10 @@ const BUILD_ADVANCE_X = [0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0];
 const BUILD_ADVANCE_Y = [0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0];
 const SHRUG_TIME = 10;
 const SHRUG_TICK = 15;
+const BOMB_PERIOD = Math.floor(1000 / TICK_INTERVAL);
+const OHNO_PERIOD = 4;
+const OHNO_TIME = 15;
+const EXPLOSION_TIME = Math.floor(3000 / TICK_INTERVAL);
 
 class Lemming {
 	constructor(x, y) {
@@ -47,6 +51,7 @@ class Lemming {
 		this.fall_distance = 0;
 		this.frame = 0;
 		this.bricks = 0;
+		this.bomb_time = undefined;
 	}
 
 	static new_faller(x, y) {
@@ -58,6 +63,8 @@ class Lemming {
 			return `splat${this.frame}`;
 		} else if (this.mode === 'shrug') {
 			return `shrug${this.frame}`;
+		} else if (this.mode === 'ohno') {
+			return `ohno${this.frame % OHNO_PERIOD}`;
 		} else if (this.fall_distance > 0) {
 			return `fall${this.frame % FALL_PERIOD}`;
 		} else if (this.mode === 'builder') {
@@ -90,11 +97,39 @@ class Lemming {
 		const bbox = this.bounding_box();
 		const d = this.direction;
 
-		// Consider dying
+		// Consider countdown
+		if (this.bomb_time !== undefined) {
+			this.bomb_time -= 1;
+			if (this.bomb_time <= 0) {
+				this.mode = 'ohno';
+				this.bomb_time = undefined;
+				this.frame = 0;
+				return;
+			}
+		}
+
+		if (this.mode === 'ohno') {
+			this.frame += 1;
+			if (this.frame >= OHNO_TIME) {
+				this.mode = 'explosion';
+				this.state = 'dead';
+				this.frame = 0;
+			}
+			return;
+		}
+
+		// Consider disappearing
 		if (this.mode === 'splat') {
 			this.frame += 1;
 			if (this.frame >= SPLAT_TIME) {
-				this.state = 'dead';
+				this.state = 'gone';
+			}
+			return;
+		}
+		if (this.mode === 'explosion') {
+			this.frame += 1;
+			if (this.frame >= EXPLOSION_TIME) {
+				this.state = 'gone';
 			}
 			return;
 		}
@@ -129,6 +164,7 @@ class Lemming {
 
 		if (this.fall_distance >= SPLAT_DISTANCE) {
 			this.mode = 'splat';
+			this.state = 'dead';
 			this.frame = 0;
 			return;
 		}
@@ -388,10 +424,11 @@ class Game {
 
 		this.timer = setInterval(() => this.tick(), TICK_INTERVAL);
 		this.buttons = [
-			new Button(0, 0, 100, 50, 'builder'),
-			new Button(100, 0, 100, 50, 'basher'),
-			new Button(200, 0, 100, 50, 'miner'),
-			new Button(300, 0, 100, 50, 'digger'),
+			new Button(0, 0, 100, 50, 'bomber'),
+			new Button(100, 0, 100, 50, 'builder'),
+			new Button(200, 0, 100, 50, 'basher'),
+			new Button(300, 0, 100, 50, 'miner'),
+			new Button(400, 0, 100, 50, 'digger'),
 		];
 	}
 
@@ -399,7 +436,7 @@ class Game {
 		const canvas = document.getElementById('canvas');
 		const scale = scaling_factor();
 		const terrain = await Terrain.load('maps/test_level.png', scale);
-		const sprite_names = [];
+		const sprite_names = ['explosion'];
 		for (let i = 0; i < WALK_PERIOD; i++) {
 			sprite_names.push(`walk${i}`);
 		}
@@ -423,6 +460,12 @@ class Game {
 		}
 		for (let i = 0; i < DIG_PERIOD; i++) {
 			sprite_names.push(`dig${i}`);
+		}
+		for (let i = 0; i < OHNO_PERIOD; i++) {
+			sprite_names.push(`ohno${i}`);
+		}
+		for (let i = 1; i <= 5; i++) {
+			sprite_names.push(`countdown${i}`);
 		}
 		const sprites = {};
 
@@ -448,7 +491,7 @@ class Game {
 		const next_lemmings = [];
 		for (const lemming of this.lemmings) {
 			lemming.tick(this.terrain, this.exit);
-			if (lemming.state === 'alive') {
+			if (lemming.state === 'alive' || lemming.state === 'dead') {
 				next_lemmings.push(lemming);
 			}
 		}
@@ -504,12 +547,19 @@ class Game {
 		}
 
 		if (sel_lemming !== undefined && sel_lemming.mode !== this.sel_action) {
-			if (this.sel_action === 'builder') {
-				sel_lemming.bricks = 12;
+			if (this.sel_action === 'bomber') {
+				if (sel_lemming.bomb_time === undefined) {
+					sel_lemming.bomb_time = BOMB_PERIOD * 5;
+					return;
+				}
+			} else {
+				if (this.sel_action === 'builder') {
+					sel_lemming.bricks = 12;
+				}
+				sel_lemming.mode = this.sel_action;
+				sel_lemming.frame = 0;
+				return;
 			}
-			sel_lemming.mode = this.sel_action;
-			sel_lemming.frame = 0;
-			return;
 		}
 	}
 
@@ -551,12 +601,70 @@ class Game {
 
 	draw_lemmings() {
 		for (const lemming of this.lemmings) {
-			this.draw_sprite_bottom_centre(lemming.get_sprite_name(), lemming.x, lemming.y, lemming.direction);
+			if (lemming.mode === 'explosion') {
+				if (lemming.frame === 0) {
+					this.draw_sprite_centre('explosion', lemming.x, lemming.y - 15);
+				} else {
+					this.draw_explosion(lemming.x, lemming.y, lemming.frame);
+				}
+			} else {
+				this.draw_sprite_bottom_centre(lemming.get_sprite_name(), lemming.x, lemming.y, lemming.direction);
+				if (lemming.bomb_time !== undefined) {
+					const n = Math.min(5, 1 + Math.floor(lemming.bomb_time / BOMB_PERIOD));
+					this.draw_sprite_bottom_centre(`countdown${n}`, lemming.x, lemming.y - 30, 1);
+				}
+			}
 		}
+	}
+
+	draw_explosion(x, y, frame) {
+		let t = frame * TICK_INTERVAL / 1000;
+		for (let i = 0; i < 20; i++) {
+			const sx = x + t * Math.cos(i) * 400;
+			const sy = y + t * Math.sin(i) * 400 - t * 200 + (t * t) * 200;
+			this.draw_shard(Math.floor(sx), Math.floor(sy), '#ff0000ff');
+		}
+	}
+
+	draw_shard(x, y, color) {
+		x *= this.scale;
+		y *= this.scale;
+		x += this.scrollx;
+		y += this.scrolly;
+		const w = 4;
+		const h = 4;
+		const cw = this.terrain.image_data.width;
+		const ch = this.terrain.image_data.height;
+		const ctx = this.canvas.getContext('2d');
+		if (x < this.scrollx) {
+			w += x - this.scrollx;
+			x = this.scrollx;
+		}
+		if (y < this.scrolly) {
+			h += y - this.scrolly;
+			y = this.scrolly;
+		}
+		if (x + w > cw) {
+			w = cw - x;
+		}
+		if (y + h > ch) {
+			h = ch - y;
+		}
+		ctx.fillStyle = color;
+		ctx.fillRect(x, y, w, h);
+		this.drawn_regions.push({x, y, w, h});
+	}
+
+	draw_sprite_centre(name, x, y) {
+		const image_element = this.sprites[name];
+		this.draw_sprite_bottom_centre(name, x, y + image_element.height / 2, 1);
 	}
 
 	draw_sprite_bottom_centre(name, x, y, direction) {
 		const image_element = this.sprites[name];
+		if (image_element === undefined) {
+			throw `No such sprite: ${name}`;
+		}
 		const scale = this.scale;
 		let sw = image_element.width;
 		let sh = image_element.height;
