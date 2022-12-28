@@ -126,7 +126,7 @@ class Lemming {
 
 		// Consider whether it's fallen off the edge
 		if (this.x < 0 || this.x >= terrain.image_data.width || this.y < 0 || this.y - bbox.h >= terrain.image_data.height) {
-			this.state = 'dead';
+			this.state = 'gone';
 			return;
 		}
 
@@ -519,7 +519,6 @@ class Game {
 
 	refresh() {
 		this.ctx.putImageData(this.terrain.image_data, this.scrollx, this.scrolly, -this.scrollx, -this.scrolly, this.canvas.width, this.canvas.height);
-		//this.restore_from_terrain(0, 0, this.canvas.width, this.canvas.height);
 		this.draw_lemmings();
 		this.draw_borders();
 		this.draw_buttons();
@@ -654,12 +653,12 @@ class Game {
 
 	restore_from_terrain(x, y, w, h) {
 		const ctx = this.ctx;
-		if (x - this.scrollx < 0 || y - this.scrolly < 0 || x + w - this.scrollx > this.terrain.image_data.width || y + h - this.scrolly > this.terrain.image_data.height) {
-			throw 'Bad dimensions in restore_from_terrain';
+		if (x < 0 || y < 0 || x + w > this.terrain.image_data.width || y + h > this.terrain.image_data.height) {
+			throw `Bad dimensions in restore_from_terrain ${x} ${y} ${w} ${h}`;
 		}
 		if (w > 0 && h > 0) {
-			const image_data = this.terrain.get_sub_data(x - this.scrollx, y - this.scrolly, w, h);
-			ctx.putImageData(image_data, x, y);
+			const image_data = this.terrain.get_sub_data(x, y, w, h);
+			ctx.putImageData(image_data, x + this.scrollx, y + this.scrolly);
 		}
 	}
 
@@ -721,7 +720,7 @@ class Game {
 		if (w > 0 && h > 0) {
 			ctx.fillStyle = color;
 			ctx.fillRect(x, y, w, h);
-			this.drawn_regions.push({x, y, w, h});
+			this.drawn_regions.push({x:x - this.scrollx, y:y - this.scrolly, w, h});
 		}
 	}
 
@@ -752,12 +751,10 @@ class Game {
 		let sx = 0;
 		let sy = 0;
 		if (x < this.scrollx) {
-			sx = (x - this.scrollx) / scale;
 			w += x - this.scrollx;
 			x = this.scrollx;
 		}
 		if (y < this.scrolly) {
-			sy = (y - this.scrolly) / scale;
 			h += y - this.scrolly;
 			y = this.scrolly;
 		}
@@ -767,8 +764,10 @@ class Game {
 		if (y + h > this.scrolly + ch) {
 			h = ch - y + this.scrolly;
 		}
+		sw = w / scale;
+		sh = h / scale;
 		if (w > 0 && h > 0) {
-			this.drawn_regions.push({x, y, w, h});
+			this.drawn_regions.push({x:x-this.scrollx, y:y-this.scrolly, w, h});
 			if (direction < 0) {
 				ctx.scale(-1, 1);
 				ctx.drawImage(image_element, sx, sy, sw, sh, -x, y, -w, h);
