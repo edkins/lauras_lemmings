@@ -422,6 +422,7 @@ class Exit {
 class Game {
 	constructor(canvas, terrain, sprites, entrance, exit, scale) {
 		this.canvas = canvas;
+		this.ctx = canvas.getContext('2d');
 		this.terrain = terrain;
 		this.drawn_regions = [];
 		this.sprites = sprites;
@@ -481,9 +482,13 @@ class Game {
 			sprite_names.push(`countdown${i}`);
 		}
 		const sprites = {};
-
+		const promises = [];
 		for (const name of sprite_names) {
-			sprites[name] = await load_image_element(`sprites/${name}.png`);
+			promises.push(load_image_element(`sprites/${name}.png`));
+		}
+		const results = await Promise.all(promises);
+		for (let i = 0; i < sprite_names.length; i++) {
+			sprites[sprite_names[i]] = results[i];
 		}
 
 		const entrance = new Entrance(142, 210, 10, 40);
@@ -603,9 +608,8 @@ class Game {
 	}
 
 	draw_buttons() {
-		const ctx = this.canvas.getContext('2d');
 		for (const button of this.buttons) {
-			button.draw(ctx);
+			button.draw(this.ctx);
 		}
 	}
 
@@ -617,7 +621,7 @@ class Game {
 	}
 
 	draw_borders() {
-		const ctx = this.canvas.getContext('2d');
+		const ctx = this.ctx;
 		ctx.fillStyle = '#888';
 		const tw = this.terrain.image_data.width;
 		const th = this.terrain.image_data.height;
@@ -628,7 +632,7 @@ class Game {
 	}
 
 	restore_from_terrain(x, y, w, h) {
-		const ctx = this.canvas.getContext('2d');
+		const ctx = this.ctx;
 		ctx.putImageData(this.terrain.image_data, this.scrollx, this.scrolly, x - this.scrollx, y - this.scrolly, w, h);
 	}
 
@@ -672,7 +676,7 @@ class Game {
 		let h = 4;
 		const cw = this.terrain.image_data.width;
 		const ch = this.terrain.image_data.height;
-		const ctx = this.canvas.getContext('2d');
+		const ctx = this.ctx;
 		if (x < this.scrollx) {
 			w += x - this.scrollx;
 			x = this.scrollx;
@@ -718,7 +722,7 @@ class Game {
 		this.drawn_regions.push({x, y, w, h});
 		const cw = this.terrain.image_data.width;
 		const ch = this.terrain.image_data.height;
-		const ctx = this.canvas.getContext('2d');
+		const ctx = this.ctx;
 		let sx = 0;
 		let sy = 0;
 		if (x < this.scrollx) {
