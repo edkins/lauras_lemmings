@@ -311,7 +311,9 @@ class Terrain {
 				this.walls[i] = 1;
 			}
 		}
-		this.offscreen_canvas = new OffscreenCanvas(this.width, this.height);
+		this.offscreen_canvas = document.createElement('canvas');
+		this.offscreen_canvas.width = this.width;
+		this.offscreen_canvas.height = this.height;
 		this.offscreen_ctx = this.offscreen_canvas.getContext('2d');
 		this.offscreen_ctx.putImageData(image_data, 0, 0);
 		this.scale = scale;
@@ -644,7 +646,7 @@ class Game {
 
 	draw_borders() {
 		const ctx = this.ctx;
-		ctx.fillStyle = '#888';
+		ctx.fillStyle = '#444';
 		const tw = this.terrain.width;
 		const th = this.terrain.height;
 		ctx.fillRect(0, 0, this.canvas.width, this.scrolly);
