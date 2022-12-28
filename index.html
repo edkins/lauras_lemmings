@@ -301,6 +301,26 @@ class Terrain {
 		return new Terrain(image_data, scale);
 	}
 
+	get_sub_data(x, y, w, h) {
+		const a = new Uint8ClampedArray(4 * w * h);
+		const thisw = this.image_data.width;
+		const thish = this.image_data.height;
+		if (x < 0 || y < 0 || w <= 0 || h <= 0 || x + w > thisw || y + h > thish) {
+			throw `Bad dimensions in get_sub_data ${x} ${y} ${w} ${h} ${thisw} ${thish}`;
+		}
+		const d = this.image_data.data;
+		for (let y1 = 0; y1 < h; y1++) {
+			for (let x1 = 0; x1 < w; x1++) {
+				for (let k = 0; k < 4; k++) {
+					let src_offset = 4 * ((y1 + y) * thisw + x1 + x) + k;
+					let dst_offset = 4 * (y1 * w + x1) + k;
+					a[dst_offset] = d[src_offset];
+				}
+			}
+		}
+		return new ImageData(a, w, h);
+	}
+
 	rect_is_empty(x, y, w, h) {
 		x *= this.scale;
 		y *= this.scale;
@@ -498,7 +518,8 @@ class Game {
 	}
 
 	refresh() {
-		this.restore_from_terrain(0, 0, this.canvas.width, this.canvas.height);
+		this.ctx.putImageData(this.terrain.image_data, this.scrollx, this.scrolly, -this.scrollx, -this.scrolly, this.canvas.width, this.canvas.height);
+		//this.restore_from_terrain(0, 0, this.canvas.width, this.canvas.height);
 		this.draw_lemmings();
 		this.draw_borders();
 		this.draw_buttons();
@@ -633,7 +654,13 @@ class Game {
 
 	restore_from_terrain(x, y, w, h) {
 		const ctx = this.ctx;
-		ctx.putImageData(this.terrain.image_data, this.scrollx, this.scrolly, x - this.scrollx, y - this.scrolly, w, h);
+		if (x - this.scrollx < 0 || y - this.scrolly < 0 || x + w - this.scrollx > this.terrain.image_data.width || y + h - this.scrolly > this.terrain.image_data.height) {
+			throw 'Bad dimensions in restore_from_terrain';
+		}
+		if (w > 0 && h > 0) {
+			const image_data = this.terrain.get_sub_data(x - this.scrollx, y - this.scrolly, w, h);
+			ctx.putImageData(image_data, x, y);
+		}
 	}
 
 	draw_lemmings() {
@@ -719,7 +746,6 @@ class Game {
 		y *= scale;
 		x += this.scrollx;
 		y += this.scrolly;
-		this.drawn_regions.push({x, y, w, h});
 		const cw = this.terrain.image_data.width;
 		const ch = this.terrain.image_data.height;
 		const ctx = this.ctx;
@@ -741,12 +767,15 @@ class Game {
 		if (y + h > this.scrolly + ch) {
 			h = ch - y + this.scrolly;
 		}
-		if (direction < 0) {
-			ctx.scale(-1, 1);
-			ctx.drawImage(image_element, sx, sy, sw, sh, -x, y, -w, h);
-			ctx.setTransform(1, 0, 0, 1, 0, 0);
-		} else {
-			ctx.drawImage(image_element, sx, sy, sw, sh, x, y, w, h);
+		if (w > 0 && h > 0) {
+			this.drawn_regions.push({x, y, w, h});
+			if (direction < 0) {
+				ctx.scale(-1, 1);
+				ctx.drawImage(image_element, sx, sy, sw, sh, -x, y, -w, h);
+				ctx.setTransform(1, 0, 0, 1, 0, 0);
+			} else {
+				ctx.drawImage(image_element, sx, sy, sw, sh, x, y, w, h);
+			}
 		}
 	}
 }
