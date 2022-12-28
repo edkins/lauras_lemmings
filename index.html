@@ -108,16 +108,6 @@ class Lemming {
 			}
 		}
 
-		if (this.mode === 'ohno') {
-			this.frame += 1;
-			if (this.frame >= OHNO_TIME) {
-				this.mode = 'explosion';
-				this.state = 'dead';
-				this.frame = 0;
-			}
-			return;
-		}
-
 		// Consider disappearing
 		if (this.mode === 'splat') {
 			this.frame += 1;
@@ -150,6 +140,18 @@ class Lemming {
 				break;
 			}
 		}
+
+		if (this.mode === 'ohno') {
+			this.frame += 1;
+			if (this.frame >= OHNO_TIME || fell !== 0) {
+				this.mode = 'explosion';
+				this.state = 'dead';
+				this.frame = 0;
+				terrain.crater(this.x, this.y - 2);
+			}
+			return;
+		}
+
 		if (fell !== 0) {
 			this.y += fell;
 			if (this.fall_distance === 0) {
@@ -164,6 +166,7 @@ class Lemming {
 
 		if (this.fall_distance >= SPLAT_DISTANCE) {
 			this.mode = 'splat';
+			this.bomb_time = undefined;
 			this.state = 'dead';
 			this.frame = 0;
 			return;
@@ -249,7 +252,7 @@ class Lemming {
 
 		// Try scrambling downhill first, if that doesn't work try walking straight and then scrambling uphill
 		if (this.mode === 'walk') {
-			for (let offset = 2; offset >= -2; offset--) {
+			for (let offset = 4; offset >= -4; offset--) {
 				if (terrain.rect_is_empty(bbox.x + d, bbox.y + offset, bbox.w, bbox.h)) {
 					this.x += d;
 					this.y += offset;
@@ -322,6 +325,14 @@ class Terrain {
 
 	erase(x, y, w, h) {
 		this.fill(x, y, w, h, 0xff000000);
+	}
+
+	crater(x, y) {
+		this.erase(x - 14, y - 5, 29, 11);
+		this.erase(x - 12, y - 7, 25, 15);
+		this.erase(x - 10, y - 10, 21, 21);
+		this.erase(x - 7, y - 12, 15, 25);
+		this.erase(x - 5, y - 14, 11, 29);
 	}
 
 	fill(x, y, w, h, color) {
@@ -631,8 +642,8 @@ class Game {
 		y *= this.scale;
 		x += this.scrollx;
 		y += this.scrolly;
-		const w = 4;
-		const h = 4;
+		let w = 4;
+		let h = 4;
 		const cw = this.terrain.image_data.width;
 		const ch = this.terrain.image_data.height;
 		const ctx = this.canvas.getContext('2d');
