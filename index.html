@@ -432,6 +432,7 @@ class Game {
 		this.scale = scale;
 		this.scrollx = 0;
 		this.scrolly = 0;
+		this.nuking = false;
 
 		this.timer = setInterval(() => this.tick(), TICK_INTERVAL);
 		this.buttons = [
@@ -440,6 +441,7 @@ class Game {
 			new Button(200, 0, 100, 50, 'basher'),
 			new Button(300, 0, 100, 50, 'miner'),
 			new Button(400, 0, 100, 50, 'digger'),
+			new Button(500, 0, 100, 50, 'nuke'),
 		];
 	}
 
@@ -506,8 +508,10 @@ class Game {
 				next_lemmings.push(lemming);
 			}
 		}
-		for (const lemming of this.entrance.tick()) {
-			next_lemmings.splice(0, 0, lemming);
+		if (!this.nuking) {
+			for (const lemming of this.entrance.tick()) {
+				next_lemmings.splice(0, 0, lemming);
+			}
 		}
 		this.lemmings = next_lemmings;
 		for (const rect of this.terrain.take_dirty()) {
@@ -517,10 +521,28 @@ class Game {
 		this.draw_buttons();
 	}
 
+	doubleclick(x, y) {
+		for (const button of this.buttons) {
+			if (button.contains(x, y) && button.action === 'nuke' ) {
+				this.nuke_lemmings();
+				return;
+			}
+		}
+	}
+
+	nuke_lemmings() {
+		this.nuking = true;
+		for (const lemming of this.lemmings) {
+			if (lemming.state === 'alive' && lemming.bomb_time === undefined) {
+				lemming.bomb_time = BOMB_PERIOD * 5;
+			}
+		}
+	}
+
 	mousedown(x, y) {
 		let sel_button = false;
 		for (const button of this.buttons) {
-			if (button.contains(x, y)) {
+			if (button.contains(x, y) && button.action !== 'nuke' ) {
 				if (button.selected) {
 					this.sel_action = undefined;
 				} else {
@@ -630,10 +652,14 @@ class Game {
 
 	draw_explosion(x, y, frame) {
 		let t = frame * TICK_INTERVAL / 1000;
-		for (let i = 0; i < 20; i++) {
-			const sx = x + t * Math.cos(i) * 400;
-			const sy = y + t * Math.sin(i) * 400 - t * 200 + (t * t) * 200;
-			this.draw_shard(Math.floor(sx), Math.floor(sy), '#ff0000ff');
+		for (let i = 0; i < 200; i++) {
+			let j = i + 1000 * x + 10000 * y;
+			const sx = x + t * Math.cos(j * 4) * Math.cos(j * 15) * 400;
+			const sy = y + t * Math.sin(j * 4) * Math.cos(j * 15) * 400 - t * 200 + (t * t) * 200;
+			const r = 128 + 127 * Math.cos(j);
+			const g = 128 + 127 * Math.cos(j + 2.1);
+			const b = 128 + 127 * Math.cos(j + 4.2);
+			this.draw_shard(Math.floor(sx), Math.floor(sy), `rgb(${r},${g},${b})`);
 		}
 	}
 
@@ -741,6 +767,12 @@ function mousedown(e) {
 	}
 }
 
+function doubleclick(e) {
+	if (the_game !== undefined) {
+		the_game.doubleclick(e.offsetX, e.offsetY);
+	}
+}
+
 function mousemove(e) {
 	if (the_game !== undefined && e.buttons) {
 		the_game.mousedrag(e.movementX, e.movementY);
@@ -791,6 +823,6 @@ window.onload = load;
 </script>
 </head>
 <body>
-<canvas id="canvas" width="100" height="100" onmousedown="mousedown(event)" onmousemove="mousemove(event)" ontouchstart="touchstart(event)" ontouchmove="touchmove(event)"></canvas>
+<canvas id="canvas" width="100" height="100" onmousedown="mousedown(event)" ondblclick="doubleclick(event)" onmousemove="mousemove(event)" ontouchstart="touchstart(event)" ontouchmove="touchmove(event)"></canvas>
 </body>
 </html>
