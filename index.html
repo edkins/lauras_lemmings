@@ -655,15 +655,17 @@ class Game {
 			h += y - this.scrolly;
 			y = this.scrolly;
 		}
-		if (x + w > cw) {
-			w = cw - x;
+		if (x + w > this.scrollx + cw) {
+			w = cw - x + this.scrollx;
 		}
-		if (y + h > ch) {
-			h = ch - y;
+		if (y + h > this.scrolly + ch) {
+			h = ch - y + this.scrolly;
 		}
-		ctx.fillStyle = color;
-		ctx.fillRect(x, y, w, h);
-		this.drawn_regions.push({x, y, w, h});
+		if (w > 0 && h > 0) {
+			ctx.fillStyle = color;
+			ctx.fillRect(x, y, w, h);
+			this.drawn_regions.push({x, y, w, h});
+		}
 	}
 
 	draw_sprite_centre(name, x, y) {
@@ -703,11 +705,11 @@ class Game {
 			h += y - this.scrolly;
 			y = this.scrolly;
 		}
-		if (x + w > cw) {
-			w = cw - x;
+		if (x + w > this.scrollx + cw) {
+			w = cw - x + this.scrollx;
 		}
-		if (y + h > ch) {
-			h = ch - y;
+		if (y + h > this.scrolly + ch) {
+			h = ch - y + this.scrolly;
 		}
 		if (direction < 0) {
 			ctx.scale(-1, 1);
